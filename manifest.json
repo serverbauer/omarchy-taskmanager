@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.serverbauer.taskmanager",
+  "name": "Omarchy Task Manager",
+  "version": "1.0.0",
+  "author": "serverbauer",
+  "license": "MIT",
+  "description": "Lightning-fast Task Manager for Omarchy. Interactive process search, window manager, immediate kill, and restart via fzf and Hyprland.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Task Manager",
+    "description": "Open the interactive task manager or kill unresponsive windows",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
