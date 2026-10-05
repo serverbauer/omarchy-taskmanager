@@ -5,6 +5,30 @@ import signal
 import subprocess
 import sys
 
+# Language detection: German if system locale starts with 'de', otherwise English default
+lang_code = os.environ.get('LANG', '')[:2].lower()
+
+STRINGS = {
+    'en': {
+        'header': 'ENTER: Kill process | ALT+R: Restart | ESC: Cancel',
+        'prompt': 'Select app/process > ',
+        'killed': '{name} (PID {pid}) was terminated.',
+        'kill_error': 'Error terminating PID {pid}: {err}',
+        'restarting': '{comm} is restarting...',
+        'unknown': 'Unknown'
+    },
+    'de': {
+        'header': 'ENTER: Stoppen (Kill) | ALT+R: Neu starten | ESC: Abbrechen',
+        'prompt': 'App / Prozess wählen > ',
+        'killed': '{name} (PID {pid}) wurde beendet.',
+        'kill_error': 'Fehler beim Beenden von PID {pid}: {err}',
+        'restarting': '{comm} wird neu gestartet...',
+        'unknown': 'Unbekannt'
+    }
+}
+
+T = STRINGS.get(lang_code, STRINGS['en'])
+
 def get_window_list():
     lines = []
     try:
@@ -13,7 +37,7 @@ def get_window_list():
         for c in clients:
             if c.get('mapped') and c.get('pid'):
                 pid = c.get('pid')
-                clazz = c.get('class') or 'Unknown'
+                clazz = c.get('class') or T['unknown']
                 title = (c.get('title') or '').replace('\n', ' ')[:50]
                 lines.append(f"{pid:<7} | 🪟 {clazz:<18} | {title}")
     except Exception:
@@ -47,8 +71,8 @@ def main():
     fzf_cmd = [
         'fzf',
         '--ansi',
-        '--header=ENTER: Stoppen (Kill) | ALT+R: Neu starten | ESC: Abbrechen',
-        '--prompt=App wählen > ',
+        f'--header={T["header"]}',
+        f'--prompt={T["prompt"]}',
         '--expect=alt-r'
     ]
 
@@ -88,16 +112,16 @@ def main():
     # Kill process
     try:
         os.kill(target_pid, signal.SIGKILL)
-        subprocess.run(['notify-send', '-i', 'process-stop', 'Task Manager', f'{app_name} (PID {target_pid}) wurde beendet.'])
+        subprocess.run(['notify-send', '-i', 'process-stop', 'Task Manager', T['killed'].format(name=app_name, pid=target_pid)])
     except Exception as e:
-        subprocess.run(['notify-send', '-u', 'critical', 'Task Manager', f'Fehler beim Beenden von PID {target_pid}: {e}'])
+        subprocess.run(['notify-send', '-u', 'critical', 'Task Manager', T['kill_error'].format(pid=target_pid, err=e)])
 
     # Restart if requested
     if key_pressed == "alt-r" and comm:
         import time
         time.sleep(0.5)
         subprocess.Popen(['uwsm-app', '--', comm])
-        subprocess.run(['notify-send', '-i', 'view-refresh', 'Task Manager', f'{comm} wird neu gestartet...'])
+        subprocess.run(['notify-send', '-i', 'view-refresh', 'Task Manager', T['restarting'].format(comm=comm)])
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -9,6 +9,7 @@ BarWidget {
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
+  readonly property bool isGerman: (Qt.locale().name.indexOf("de") === 0)
 
   Process {
     id: launcher
@@ -23,7 +24,9 @@ BarWidget {
   BarButton {
     id: button
     bar: root.bar
-    tooltip: "Task Manager (Ctrl+Shift+Esc)\nRechtsklick: Aktives Fenster beenden"
+    tooltip: root.isGerman
+      ? "Task Manager (Ctrl+Shift+Esc)\nRechtsklick: Aktives Fenster beenden"
+      : "Task Manager (Ctrl+Shift+Esc)\nRight-click: Terminate focused window"
     horizontalPadding: 8
 
     onClicked: {
