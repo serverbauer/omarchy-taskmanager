@@ -29,44 +29,85 @@ STRINGS = {
 
 T = STRINGS.get(lang_code, STRINGS['en'])
 
-def get_window_list():
-    lines = []
+def sanitize_text(text):
+    if not text:
+        return ''
+    # Strip newlines, carriage returns, null bytes, and delimiter pipes
+    return ''.join(c if (c >= ' ' and c not in '|\r\n\0') else ' ' for c in str(text)).strip()
+
+def get_window_entries():
+    items = []
     try:
         raw = subprocess.check_output(['hyprctl', 'clients', '-j'], text=True)
         clients = json.loads(raw)
         for c in clients:
             if c.get('mapped') and c.get('pid'):
                 pid = c.get('pid')
-                clazz = c.get('class') or T['unknown']
-                title = (c.get('title') or '').replace('\n', ' ')[:50]
-                lines.append(f"{pid:<7} | 🪟 {clazz:<18} | {title}")
+                if not isinstance(pid, int) or pid <= 1:
+                    continue
+                clazz = sanitize_text(c.get('class') or T['unknown'])[:25]
+                title = sanitize_text(c.get('title') or '')[:50]
+                label = f"{pid:<7} | 🪟 {clazz:<18} | {title}"
+                items.append({
+                    'pid': pid,
+                    'name': clazz,
+                    'label': label
+                })
     except Exception:
         pass
-    return lines
+    return items
 
-def get_process_list():
-    lines = []
+def get_process_entries(known_pids):
+    items = []
     try:
         out = subprocess.check_output(
             ['ps', '-u', os.environ.get('USER', 'finn'), '-o', 'pid,%cpu,%mem,comm', '--sort=-%cpu'],
             text=True
         )
-        procs = out.strip().splitlines()[1:25]
+        procs = out.strip().splitlines()[1:30]
         for p in procs:
             parts = p.split(None, 3)
             if len(parts) == 4:
-                pid, cpu, mem, comm = parts
-                lines.append(f"{pid:<7} | ⚙️  CPU: {cpu:>4}% RAM: {mem:>4}% | {comm}")
+                try:
+                    pid = int(parts[0])
+                except ValueError:
+                    continue
+                if pid <= 1 or pid in known_pids:
+                    continue
+                cpu = sanitize_text(parts[1])
+                mem = sanitize_text(parts[2])
+                comm = sanitize_text(parts[3])[:35]
+                label = f"{pid:<7} | ⚙️  CPU: {cpu:>4}% RAM: {mem:>4}% | {comm}"
+                items.append({
+                    'pid': pid,
+                    'name': comm,
+                    'label': label
+                })
     except Exception:
         pass
-    return lines
+    return items
 
 def main():
-    windows = get_window_list()
-    processes = get_process_list()
+    windows = get_window_entries()
+    win_pids = {w['pid'] for w in windows}
+    processes = get_process_entries(win_pids)
 
-    all_entries = windows + ["--------------------------------------------------------------------------------"] + processes
-    input_text = "\n".join(all_entries)
+    # Maintain an authoritative internal map from sanitized label to validated item
+    registry = {}
+    display_lines = []
+
+    for w in windows:
+        display_lines.append(w['label'])
+        registry[w['label']] = w
+
+    if display_lines and processes:
+        display_lines.append("--------------------------------------------------------------------------------")
+
+    for p in processes:
+        display_lines.append(p['label'])
+        registry[p['label']] = p
+
+    input_text = "\n".join(display_lines)
 
     fzf_cmd = [
         'fzf',
@@ -79,7 +120,7 @@ def main():
     try:
         proc = subprocess.Popen(fzf_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
         stdout, _ = proc.communicate(input=input_text)
-    except Exception as e:
+    except Exception:
         sys.exit(1)
 
     lines = stdout.strip().splitlines()
@@ -89,23 +130,25 @@ def main():
     key_pressed = lines[0] if len(lines) > 1 else ""
     selected_line = lines[1] if len(lines) > 1 else lines[0]
 
-    if not selected_line or selected_line.startswith("---"):
+    # Validate against our authoritative internal registry
+    if selected_line not in registry:
         sys.exit(0)
 
-    parts = selected_line.split('|')
-    try:
-        target_pid = int(parts[0].strip())
-    except ValueError:
+    target_item = registry[selected_line]
+    target_pid = target_item['pid']
+
+    # Strict defensive guard: never signal PID <= 1 or negative PIDs
+    if not isinstance(target_pid, int) or target_pid <= 1:
         sys.exit(0)
 
-    app_name = parts[1].strip() if len(parts) > 1 else f"PID {target_pid}"
+    app_name = target_item['name'] or f"PID {target_pid}"
 
     # Get command for restart if ALT+R was pressed
     comm = ""
     if key_pressed == "alt-r":
         try:
             with open(f"/proc/{target_pid}/comm", "r") as f:
-                comm = f.read().strip()
+                comm = sanitize_text(f.read().strip())
         except Exception:
             pass
 

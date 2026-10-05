@@ -15,8 +15,9 @@ fi
 
 if [ "$ACTION" = "kill-active" ]; then
     PID=$(hyprctl activewindow -j 2>/dev/null | jq -r '.pid // empty')
-    CLASS=$(hyprctl activewindow -j 2>/dev/null | jq -r '.class // empty')
-    if [ -n "$PID" ] && [ "$PID" -gt 0 ]; then
+    CLASS=$(hyprctl activewindow -j 2>/dev/null | jq -r '.class // empty' | tr -d '|\r\n')
+    # Validate PID: must be positive integer and greater than 1
+    if [[ "$PID" =~ ^[0-9]+$ ]] && [ "$PID" -gt 1 ]; then
         kill -9 "$PID"
         printf -v BODY "$MSG_STOPPED_BODY" "$CLASS" "$PID"
         notify-send -u normal -i process-stop "$MSG_STOPPED_TITLE" "$BODY"
