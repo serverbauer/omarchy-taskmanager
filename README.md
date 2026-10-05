@@ -4,6 +4,7 @@ A lightning-fast, keyboard-driven Task Manager and Window Killer plugin for **[O
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Omarchy%20%7C%20Hyprland-purple.svg)
+![Views](https://komarev.com/ghpvc/?username=serverbauer-omarchy-taskmanager&label=Views&color=0e75b6&style=flat)
 
 ---
 
