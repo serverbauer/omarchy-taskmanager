@@ -23,7 +23,7 @@ if [ "$ACTION" = "kill-active" ]; then
         if [[ "$PID" =~ ^[0-9]+$ ]] && [ "$PID" -gt 1 ]; then
             kill -9 "$PID"
             printf -v BODY "$MSG_STOPPED_BODY" "$CLASS" "$PID"
-            notify-send -u normal -i process-stop "$MSG_STOPPED_TITLE" "$BODY"
+            timeout 2s notify-send -u normal -i process-stop "$MSG_STOPPED_TITLE" "$BODY" || true
         fi
     fi
     exit 0

@@ -5,6 +5,7 @@ import select
 import signal
 import subprocess
 import sys
+import time
 
 # Language detection: German if system locale starts with 'de', otherwise English default
 lang_code = os.environ.get('LANG', '')[:2].lower()
@@ -38,16 +39,50 @@ def sanitize_text(text):
 
 def get_window_entries():
     items = []
+    deadline = time.monotonic() + 1.5
+    byte_budget = 65536  # Hard 64 KiB byte budget for producer capture
+    buffer = ""
+
     try:
-        # Hard 2.0s deadline on finite window listing helper
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             ['hyprctl', 'clients', '-j'],
-            capture_output=True,
-            text=True,
-            timeout=2.0
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True
         )
-        if proc.returncode == 0 and proc.stdout:
-            clients = json.loads(proc.stdout)
+        poll = select.poll()
+        poll.register(proc.stdout, select.POLLIN)
+
+        try:
+            while byte_budget > 0:
+                now = time.monotonic()
+                if now >= deadline:
+                    break
+                timeout_ms = max(1, int((deadline - now) * 1000))
+                if not poll.poll(timeout_ms):
+                    break
+                chunk = proc.stdout.read(min(byte_budget, 4096))
+                if not chunk:
+                    break
+                byte_budget -= len(chunk.encode('utf-8'))
+                buffer += chunk
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=0.5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+        if buffer:
+            raw = buffer.strip()
+            # If byte budget truncated mid-stream, repair array boundary
+            if not raw.endswith(']'):
+                last_brace = raw.rfind('}')
+                if last_brace != -1:
+                    raw = raw[:last_brace+1] + ']'
+                else:
+                    raw = '[]'
+            clients = json.loads(raw)
             for c in clients:
                 if len(items) >= 64:
                     break
@@ -69,9 +104,12 @@ def get_window_entries():
 
 def get_process_entries(known_pids):
     items = []
+    user = os.environ.get('USER', 'finn')
+    deadline = time.monotonic() + 1.5
+    byte_budget = 8192  # Hard 8 KiB byte budget for producer capture
+    buffer = ""
+
     try:
-        user = os.environ.get('USER', 'finn')
-        # Stream process list with strict deadline to prevent unbounded producer buffering
         proc = subprocess.Popen(
             ['ps', '-u', user, '-o', 'pid,%cpu,%mem,comm', '--sort=-%cpu'],
             stdout=subprocess.PIPE,
@@ -80,38 +118,48 @@ def get_process_entries(known_pids):
         )
         poll = select.poll()
         poll.register(proc.stdout, select.POLLIN)
-        # Skip header with 1.0s deadline
-        if poll.poll(1000):
-            proc.stdout.readline()
-        while len(items) < 30:
-            events = poll.poll(500)
-            if not events:
-                break
-            line = proc.stdout.readline()
-            if not line:
-                break
-            parts = line.split(None, 3)
-            if len(parts) == 4:
-                try:
-                    pid = int(parts[0])
-                except ValueError:
-                    continue
-                if pid <= 1 or pid in known_pids:
-                    continue
-                cpu = sanitize_text(parts[1])[:6]
-                mem = sanitize_text(parts[2])[:6]
-                comm = sanitize_text(parts[3])[:35]
-                label = f"{pid:<7} | ⚙️  CPU: {cpu:>4}% RAM: {mem:>4}% | {comm}"
-                items.append({
-                    'pid': pid,
-                    'name': comm,
-                    'label': label
-                })
-        proc.terminate()
+
         try:
-            proc.wait(timeout=0.5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+            while len(items) < 30 and byte_budget > 0:
+                now = time.monotonic()
+                if now >= deadline:
+                    break
+                timeout_ms = max(1, int((deadline - now) * 1000))
+                if not poll.poll(timeout_ms):
+                    break
+                chunk = proc.stdout.read(min(byte_budget, 1024))
+                if not chunk:
+                    break
+                byte_budget -= len(chunk.encode('utf-8'))
+                buffer += chunk
+
+                while '\n' in buffer:
+                    line, buffer = buffer.split('\n', 1)
+                    parts = line.split(None, 3)
+                    if len(parts) == 4:
+                        try:
+                            pid = int(parts[0])
+                        except ValueError:
+                            continue  # header or unparseable
+                        if pid <= 1 or pid in known_pids:
+                            continue
+                        cpu = sanitize_text(parts[1])[:6]
+                        mem = sanitize_text(parts[2])[:6]
+                        comm = sanitize_text(parts[3])[:35]
+                        label = f"{pid:<7} | ⚙️  CPU: {cpu:>4}% RAM: {mem:>4}% | {comm}"
+                        items.append({
+                            'pid': pid,
+                            'name': comm,
+                            'label': label
+                        })
+                        if len(items) >= 30:
+                            break
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=0.5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
     except Exception:
         pass
     return items
