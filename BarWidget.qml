@@ -11,14 +11,22 @@ BarWidget {
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property bool isGerman: (Qt.locale().name.indexOf("de") === 0)
 
+  function localPath(url) {
+    var value = String(url || "")
+    if (value.indexOf("file://") === 0) value = value.slice(7)
+    return decodeURIComponent(value)
+  }
+
+  readonly property string scriptPath: localPath(Qt.resolvedUrl("omarchy-taskmanager.sh"))
+
   Process {
     id: launcher
-    command: ["omarchy-taskmanager.sh"]
+    command: [root.scriptPath]
   }
 
   Process {
     id: killActive
-    command: ["omarchy-taskmanager.sh", "kill-active"]
+    command: [root.scriptPath, "kill-active"]
   }
 
   BarButton {

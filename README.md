@@ -33,16 +33,18 @@ A lightning-fast, keyboard-driven Task Manager and Window Killer plugin for **[O
 
 ## Installation
 
-### Method 1: Using `omarchy plugin add`
+### 1-Click / Marketplace Installation (Recommended)
+You can install the plugin with a single click from the **[Omarchy Plugin Marketplace](https://omarchyplugins.com/plugin.html?id=io.github.serverbauer.taskmanager)** or run:
 ```bash
-omarchy plugin add https://github.com/serverbauer/omarchy-taskmanager
+omarchy plugin add io.github.serverbauer.taskmanager
 ```
+The bar widget is self-contained, launches immediately on click, and requires no manual setup.
 
-### Method 2: Manual Installation
-```bash
-git clone https://github.com/serverbauer/omarchy-taskmanager.git
-cd omarchy-taskmanager
-./install.sh
+### Optional: Global Keybindings
+To also launch the Task Manager via keyboard shortcut (`CTRL + SHIFT + ESC`), add the following to `~/.config/hypr/bindings.lua`:
+```lua
+o.bind("CTRL + SHIFT + ESCAPE", "Task Manager", "~/.config/omarchy/plugins/io.github.serverbauer.taskmanager/omarchy-taskmanager.sh")
+o.bind("SUPER + SHIFT + ESCAPE", "Kill active window", "~/.config/omarchy/plugins/io.github.serverbauer.taskmanager/omarchy-taskmanager.sh kill-active")
 ```
 
 ---
