@@ -14,13 +14,17 @@ else
 fi
 
 if [ "$ACTION" = "kill-active" ]; then
-    PID=$(hyprctl activewindow -j 2>/dev/null | jq -r '.pid // empty')
-    CLASS=$(hyprctl activewindow -j 2>/dev/null | jq -r '.class // empty' | tr -d '|\r\n')
-    # Validate PID: must be positive integer and greater than 1
-    if [[ "$PID" =~ ^[0-9]+$ ]] && [ "$PID" -gt 1 ]; then
-        kill -9 "$PID"
-        printf -v BODY "$MSG_STOPPED_BODY" "$CLASS" "$PID"
-        notify-send -u normal -i process-stop "$MSG_STOPPED_TITLE" "$BODY"
+    # Finite query with hard 2s deadline and bounded JSON capture
+    WIN_JSON=$(timeout 2s hyprctl activewindow -j 2>/dev/null | head -c 8192 || true)
+    if [ -n "$WIN_JSON" ]; then
+        PID=$(echo "$WIN_JSON" | jq -r '.pid // empty' 2>/dev/null)
+        CLASS=$(echo "$WIN_JSON" | jq -r '.class // empty' 2>/dev/null | tr -d '|\r\n' | head -c 64)
+        # Validate PID: must be positive integer and greater than 1
+        if [[ "$PID" =~ ^[0-9]+$ ]] && [ "$PID" -gt 1 ]; then
+            kill -9 "$PID"
+            printf -v BODY "$MSG_STOPPED_BODY" "$CLASS" "$PID"
+            notify-send -u normal -i process-stop "$MSG_STOPPED_TITLE" "$BODY"
+        fi
     fi
     exit 0
 fi
