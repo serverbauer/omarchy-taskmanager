@@ -19,6 +19,9 @@ BarWidget {
 
   readonly property string scriptPath: localPath(Qt.resolvedUrl("omarchy-taskmanager.sh"))
 
+  implicitWidth: button.implicitWidth
+  implicitHeight: button.implicitHeight
+
   Process {
     id: launcher
     command: [root.scriptPath]
@@ -29,45 +32,23 @@ BarWidget {
     command: [root.scriptPath, "kill-active"]
   }
 
-  BarButton {
+  WidgetButton {
     id: button
+    anchors.fill: parent
     bar: root.bar
-    tooltip: root.isGerman
+    text: "⚡ Tasks"
+    tooltipText: root.isGerman
       ? "Task Manager (Ctrl+Shift+Esc)\nRechtsklick: Aktives Fenster beenden"
       : "Task Manager (Ctrl+Shift+Esc)\nRight-click: Terminate focused window"
-    horizontalPadding: 8
+    horizontalMargin: 8
 
-    onClicked: {
-      launcher.running = false
-      launcher.running = true
-    }
-
-    MouseArea {
-      anchors.fill: parent
-      acceptedButtons: Qt.RightButton
-      onClicked: {
+    onPressed: function(button) {
+      if (button === Qt.RightButton) {
         killActive.running = false
         killActive.running = true
-      }
-    }
-
-    contentItem: Row {
-      spacing: 6
-      anchors.verticalCenter: parent.verticalCenter
-
-      Text {
-        text: "⚡"
-        font.pixelSize: 13
-        anchors.verticalCenter: parent.verticalCenter
-      }
-
-      Text {
-        text: "Tasks"
-        color: root.foreground
-        font.family: root.fontFamily
-        font.pixelSize: 12
-        font.bold: true
-        anchors.verticalCenter: parent.verticalCenter
+      } else {
+        launcher.running = false
+        launcher.running = true
       }
     }
   }
